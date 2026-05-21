@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hangman</title>
+    <style>
+        :root {
+            --bg-color: #0b0b10;
+            --card-color: #161622;
+            --text-color: #ffffff;
+            --accent-color: #ff3838;
+            --success-color: #05c46b;
+        }
+
+        /* Prevent scrolling and secure a true mobile app viewport */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+        }
+
+        /* Container scales fluidly on mobile, but mimics a sleek phone shell on desktop PC */
+        .game-container {
+            width: 100%;
+            height: 100%;
+            max-width: 430px; /* Standard modern mobile phone layout width */
+            max-height: 850px;
+            background: var(--card-color);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        /* Desktop border wrapper enhancement */
+        @media (min-width: 440px) {
+            .game-container {
+                height: 92vh;
+                border-radius: 24px;
+                border: 2px solid #333;
+            }
+        }
+
+        .header-controls {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 15px;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        #timer-display {
+            color: var(--accent-color);
+            min-width: 75px;
+            text-align: right;
+        }
+
+        /* Subtle audio controller layout toggles */
+        .audio-toggle {
+            background: #333;
+            border: none;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        canvas {
+            background: #0f0f18; /* Deeper shadows for background vortex particles visibility */
+            border-radius: 16px;
+            width: 100%;
+            max-height: 35vh; /* Responsive clamp to prioritize layout limits */
+            aspect-ratio: 1;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+        }
+
+        /* Upgraded layout: Flexible horizontal row matching complete words without breaks */
+        .word-display {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 16px;
+            row-gap: 12px;
+            margin: 10px 0;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Individual word wrapper component to protect characters from multi-line splitting */
+        .word-block {
+            display: flex;
+            gap: 4px;
+            white-space: nowrap;
+            font-size: 1.6rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .info-text {
+            color: #888;
+            font-size: 0.8rem;
+            text-align: center;
+            margin: 2px 0;
+        }
+
+        .used-letters {
+            font-size: 0.95rem;
+            color: #ff7f50;
+            min-height: 1.2em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+            max-width: 100%;
+        }
+
+        #hidden-input {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            font-size: 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(10, 10, 10, 0.95);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Desktop boundaries preservation inside overlays */
+        @media (min-width: 440px) {
+            .overlay { border-radius: 22px; }
+        }
+
+        .overlay h2 {
+            font-size: 2.2rem;
+            margin: 0 0 10px 0;
+        }
+
+        .overlay p {
+            font-size: 1.1rem;
+            margin: 0 0 20px 0;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container" id="gameCard">
+    <!-- Header Controls & Audio Panel -->
+    <div class="header-controls">
+        <div class="stats-bar">
+            <div>Lv: <span id="level-val">1</span></div>
+            <div id="timer-display">⏱ <span id="timer-val">10.0</span>s</div>
+        </div>
+        <button class="audio-toggle" id="audio-btn" onclick="toggleMute()">🔊 Music On</button>
+    </div>
+
+    <!-- The Gantries / Stickman Display Box -->
+    <canvas id="hangmanCanvas" width="300" height="300"></canvas>
+
+    <!-- Interactive Letter Space -->
+    <div class="word-display" id="word-space"></div>
+    
+    <div>
+        <div class="info-text">Tap anywhere to pull up your keyboard</div>
+        <div class="used-letters" id="used-space"></div>
+    </div>
+
+    <!-- Invisible Anchor Hook Input -->
+    <input type="text" id="hidden-input" autocomplete="off" inputmode="text">
+
+    <!-- Game Over / Win Modal Sheets -->
+    <div class="overlay" id="screen-overlay">
+        <h2 id="overlay-title">GAME OVER</h2>
+        <p id="overlay-msg">The correct target word was: </p>
+        <button class="btn" id="action-btn" onclick="resetGame()">Try Again</button>
+    </div>
+</div>
+
+<script src="words.js"></script>
+<script>
+    const canvas = document.getElementById('hangmanCanvas');
+    const ctx = canvas.getContext('2d');
+    const hiddenInput = document.getElementById('hidden-input');
+    const wordSpace = document.getElementById('word-space');
+    const usedSpace = document.getElementById('used-space');
+    const levelVal = document.getElementById('level-val');
+    const timerVal = document.getElementById('timer-val');
+    const overlay = document.getElementById('screen-overlay');
+    const overlayTitle = document.getElementById('overlay-title');
+    const overlayMsg = document.getElementById('overlay-msg');
+    const actionBtn = document.getElementById('action-btn');
+    const audioBtn = document.getElementById('audio-btn');
+
+    // WEB AUDIO API ENGINE (Replaces external mp3 files completely)
+    let audioCtx = null;
+    let bgMusicTimer = null;
+    let currentNoteIndex = 0;
+    
+    // Simple looping melodic arpeggio sequence (MIDI note frequencies)
+    const bgMelody = [261.63, 293.66, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66]; // C4 to G4 loop
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            startMusicLoop();
+        }
+    }
+
+    function startMusicLoop() {
+        if (bgMusicTimer) clearInterval(bgMusicTimer);
+        // Play a background note every 400 milliseconds
+        bgMusicTimer = setInterval(() => {
+            if (isMuted || overlay.style.display === 'flex') return;
+            playTone(bgMelody[currentNoteIndex], 'triangle', 0.15, 0.05);
+            currentNoteIndex = (currentNoteIndex + 1) % bgMelody.length;
+        }, 400);
+    }
+
+    function playTone(frequency, type, duration, volume) {
+        if (!audioCtx || isMuted) return;
+        try {
+            let osc = audioCtx.createOscillator();
+            let gainNode = audioCtx.createGain();
+            
+            osc.type = type;
+            osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+            
+            gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+            // Linear fade-out curve to prevent popping sounds
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        } catch(e) { console.log(e); }
+    }
+
+    // Synthesizer routines mapped directly to custom game event hooks
+    function playSFX(type) {
+        if (!audioCtx || isMuted) return;
+        
+        const now = audioCtx.currentTime;
+        if (type === 'wrong') {
+            // High-tension spring tension sound to simulate being reeled upwards
+            playTone(220, 'sawtooth', 0.1, 0.12);
+            setTimeout(() => playTone(330, 'sawtooth', 0.12, 0.10), 60);
+        } else if (type === 'win') {
+            // High-pitched cheerful major chord sweep chimes
+            const chimes = [523.25, 659.25, 783.99, 1046.50]; // C5 - E5 - G5 - C6
+            chimes.forEach((freq, i) => {
+                setTimeout(() => playTone(freq, 'sine', 0.3, 0.15), i * 100);
+            });
+        } else if (type === 'lose') {
+            // Low-pitched somber sliding game-over cadence
+            const downfalls = [220.00, 196.00, 174.61, 146.83]; // A3 - G3 - F3 - D3
+            downfalls.forEach((freq, i) => {
+                setTimeout(() => playTone(freq, 'square', 0.4, 0.12), i * 150);
+            });
+        }
+    }
+
+    let currentLevel = 1;
+    let currentWord = "";
+    let displayWord = []; 
+    let guessedLetters = new Set();
+    let wrongAttempts = 0;
+    const maxAttempts = 5; // ADJUSTED TO MAX 5 TO PERFECTLY MATCH THE SCENARIO SCALING
+    
+    let gameTimer = null;
+    let timeLeft = 10.0;
+    let isMuted = false;
+    let userInteracted = false;
+
+    // Advanced Interpolation State Variables for Smooth Rope Pulling
+    let currentHeightOffset = 0;
+    let animationFrameId = null;
+    let swingTime = 0;
+
+    // Wind Particle System Engine Setup arrays
+    let windParticles = [];
+    let windBurstTimer = 0;
+    let windIntensity = 0;
+
+    function createWindParticle() {
+        return {
+            x: -20,
+            y: Math.random() * 200 + 20,
+            length: Math.random() * 40 + 20,
+            speed: Math.random() * 4 + 4,
+            alpha: Math.random() * 0.15 + 0.05
+        };
+    }
+
+    // Prefill background matrix safely
+    for(let i=0; i<15; i++) {
+        let p = createWindParticle();
+        p.x = Math.random() * 300;
+        windParticles.push(p);
+    }
+
+    // Handle background audio initializing restrictions on modern browsers
+    document.addEventListener('click', () => {
+        hiddenInput.focus();
+        if (!userInteracted) {
+            userInteracted = true;
+            initAudio();
+        }
+    });
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        if (isMuted) {
+            audioBtn.textContent = "🔇 Muted";
+            audioBtn.style.background = "#555";
+        } else {
+            audioBtn.textContent = "🔊 Music On";
+            audioBtn.style.background = "#333";
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+    }
+
+    hiddenInput.addEventListener('input', (e) => {
+        const value = e.target.value.toLowerCase();
+        hiddenInput.value = ''; 
+        
+        if (value.length > 0) {
+            const char = value[value.length - 1];
+            if (char >= 'a' && char <= 'z') {
+                processGuess(char);
+            }
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            if (overlay.style.display === 'flex') {
+                actionBtn.click();
+            }
+        } else if (e.key === 'Escape') {
+            resetToMainMenu();
+        }
+    });
+
+    function initLevel() {
+        clearInterval(gameTimer);
+        guessedLetters.clear();
+        wrongAttempts = 0;
+        usedSpace.textContent = "";
+        
+        timeLeft = Math.max(3.0, (10 - (currentLevel - 1) * 0.3)).toFixed(1);
+        levelVal.textContent = currentLevel;
+        timerVal.textContent = timeLeft;
+
+        currentWord = wordLibrary[Math.floor(Math.random() * wordLibrary.length)].toLowerCase();
+        
+        let missingTarget = 3 + Math.floor((currentLevel - 1) / 5);
+        generateHiddenWordPattern(missingTarget);
+
+        // Reset tracking visual properties
+        currentHeightOffset = 0;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        tickVisualEngine();
+
+        startCountdown();
+        overlay.style.display = 'none';
+        
+        // Timeout buffer ensures keyboard focus registers cleanly
+        setTimeout(() => { hiddenInput.focus(); }, 100);
+    }
+
+    function generateHiddenWordPattern(blankCount) {
+        displayWord = [];
+        let cleanIndices = [];
+
+        for (let i = 0; i < currentWord.length; i++) {
+            if (currentWord[i] === ' ') {
+                displayWord.push(' ');
+            } else {
+                displayWord.push(currentWord[i]);
+                cleanIndices.push(i);
+            }
+        }
+
+        let elementsToHide = Math.min(blankCount, cleanIndices.length);
+        
+        for (let i = cleanIndices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [cleanIndices[i], cleanIndices[j]] = [cleanIndices[j], cleanIndices[i]];
+        }
+
+        for (let i = 0; i < elementsToHide; i++) {
+            displayWord[cleanIndices[i]] = '_';
+        }
+
+        renderWordDisplay();
+    }
+
+    // Upgraded rendering parser: Groups letters into separate structural word units
+    function renderWordDisplay() {
+        wordSpace.innerHTML = "";
+        let currentBlock = document.createElement('div');
+        currentBlock.className = 'word-block';
+
+        displayWord.forEach((char) => {
+            if (char === ' ') {
+                if (currentBlock.children.length > 0) {
+                    wordSpace.appendChild(currentBlock);
+                    currentBlock = document.createElement('div');
+                    currentBlock.className = 'word-block';
+                }
+            } else {
+                let letterSpan = document.createElement('span');
+                letterSpan.textContent = char;
+                currentBlock.appendChild(letterSpan);
+            }
+        });
+
+        if (currentBlock.children.length > 0) {
+            wordSpace.appendChild(currentBlock);
+        }
+    }
+
+    function startCountdown() {
+        gameTimer = setInterval(() => {
+            timeLeft = (parseFloat(timeLeft) - 0.1).toFixed(1);
+            timerVal.textContent = timeLeft;
+
+            if (timeLeft <= 0) {
+                clearInterval(gameTimer);
+                handleLoss(true); 
+            }
+        }, 100);
+    }
+
+    function processGuess(letter) {
+        if (guessedLetters.has(letter) || overlay.style.display === 'flex') return;
+
+        guessedLetters.add(letter);
+        usedSpace.textContent = Array.from(guessedLetters).join(', ');
+
+        if (currentWord.includes(letter)) {
+            for (let i = 0; i < currentWord.length; i++) {
+                if (currentWord[i] === letter && displayWord[i] === '_') {
+                    displayWord[i] = letter;
+                }
+            }
+            renderWordDisplay();
+
+            if (!displayWord.includes('_')) {
+                clearInterval(gameTimer);
+                handleWin();
+            }
+        } else {
+            wrongAttempts++;
+            playSFX('wrong');
+            if (wrongAttempts >= maxAttempts) {
+                clearInterval(gameTimer);
+                handleLoss(false);
+            }
+        }
+    }
+
+    function handleWin() {
+        playSFX('win');
+        overlay.style.display = 'flex';
+        overlayTitle.textContent = "LEVEL PASSED!";
+        overlayTitle.style.color = "var(--success-color)";
+        overlayMsg.textContent = `Excellent job on guessing "${currentWord.toUpperCase()}"`;
+        actionBtn.textContent = "Advance to Next Level";
+        currentLevel++;
+    }
+
+    function handleLoss(isTimeout) {
+        playSFX('lose');
+        overlay.style.display = 'flex';
+        overlayTitle.textContent = "GAME OVER";
+        overlayTitle.style.color = "var(--accent-color)";
+        overlayMsg.textContent = isTimeout 
+            ? `Time ran out! The phrase was "${currentWord.toUpperCase()}"`
+            : `Hanged! The correct phrase was "${currentWord.toUpperCase()}"`;
+        actionBtn.textContent = "Restart Game";
+        currentLevel = 1; 
+    }
+
+    function resetGame() {
+        initLevel();
+    }
+
+    function resetToMainMenu() {
+        clearInterval(gameTimer);
+        currentLevel = 1;
+        initLevel();
+    }
+
+    // Animation Ticker Engine: Eases vertical height positions and updates wind particle vectors
+    function tickVisualEngine() {
+        swingTime += 0.04;
+        
+        // Dynamic continuous calculation loop for wind swirl cycles every 4.5 seconds
+        windBurstTimer += 0.015;
+        let windCycle = Math.sin(windBurstTimer);
+        windIntensity = Math.max(0.1, windCycle * windCycle); // Smoothly crests wind density up and down
+
+        // Update wind particle parameters dynamically
+        windParticles.forEach(p => {
+            p.x += p.speed * (1 + windIntensity * 1.5);
+            // Swirl curved sinus movement path calculation
+            p.y += Math.sin(p.x * 0.03 + swingTime) * (windIntensity * 1.2);
+            if (p.x > 320) {
+                Object.assign(p, createWindParticle());
+            }
+        });
+        
+        // Re-calibrated vertical hoist logic: Maximum offset ceiling safely locked at exactly 60px
+        // 5 max pulls * 12px increments = 60px max total offset safely keeping head below cross beam loop bounds
+        let targetHeightOffset = wrongAttempts * 12;
+        currentHeightOffset += (targetHeightOffset - currentHeightOffset) * 0.08;
+
+        drawGallowsAndMan();
+        animationFrameId = requestAnimationFrame(tickVisualEngine);
+    }
+
+    // Helper function to render a realistic 3D shaded wooden beam using linear lighting gradients
+    function draw3DBeam(x1, y1, x2, y2, thickness) {
+        ctx.save();
+        let angle = Math.atan2(y2 - y1, x2 - x1);
+        let length = Math.sqrt((x2 - x1)**2 + (y2 - y1)**2);
+        ctx.translate(x1, y1);
+        ctx.rotate(angle);
+        
+        let woodGrad = ctx.createLinearGradient(0, 0, 0, thickness);
+        woodGrad.addColorStop(0, '#5a3d28'); woodGrad.addColorStop(0.3, '#8b5a2b');
+        woodGrad.addColorStop(0.8, '#4a2e1b'); woodGrad.addColorStop(1, '#2d1a0f');
+        
+        ctx.fillStyle = woodGrad;
+        ctx.fillRect(0, -thickness/2, length, thickness);
+        ctx.fillStyle = '#3a2213';
+        ctx.fillRect(length - 2, -thickness/2, 2, thickness);
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, -thickness/2); ctx.lineTo(length, -thickness/2); ctx.stroke();
+        ctx.restore();
+    }
+
+    // Helper to render shaded 3D capsules for realistic stickman body structures
+    function draw3DCylinder(x1, y1, x2, y2, radius) {
+        ctx.save();
+        let angle = Math.atan2(y2 - y1, x2 - x1);
+        let length = Math.sqrt((x2 - x1)**2 + (y2 - y1)**2);
+        ctx.translate(x1, y1);
+        ctx.rotate(angle);
+
+        let cylGrad = ctx.createLinearGradient(0, -radius, 0, radius);
+        cylGrad.addColorStop(0, '#ffffff');
+        cylGrad.addColorStop(0.4, '#b0b5b8');
+        cylGrad.addColorStop(1, '#505558');
+        ctx.fillStyle = cylGrad;
+
+        // Draw perfect rounded volumetric profile capsules
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, Math.PI/2, (Math.PI*3)/2);
+        ctx.lineTo(length, -radius);
+        ctx.arc(length, 0, radius, (Math.PI*3)/2, Math.PI/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // Custom Canvas Render Engine: Renders wind backdrop, gallows infrastructure, and 3D stickman geometry
+    function drawGallowsAndMan() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 1. Draw Background Swirling Atmospheric Wind Flow Layers (Renders BEHIND everything else)
+        ctx.save();
+        windParticles.forEach(p => {
+            let windGrad = ctx.createLinearGradient(p.x, p.y, p.x + p.length, p.y);
+            windGrad.addColorStop(0, `rgba(255,255,255,0)`);
+            windGrad.addColorStop(0.5, `rgba(255,255,255,${p.alpha * (0.3 + windIntensity * 0.7)})`);
+            windGrad.addColorStop(1, `rgba(255,255,255,0)`);
+            ctx.strokeStyle = windGrad;
+            ctx.lineWidth = 1.5 + windIntensity * 1.5;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x + p.length, p.y);
+            ctx.stroke();
+        });
+        ctx.restore();
+
+        // Setup global scene ambient drop shadows across all foreground entities
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetX = 6;
+        ctx.shadowOffsetY = 8;
+
+        // 2. Draw Highly Detailed Realistic 3D Timber Gallows Frame
+        draw3DBeam(15, 280, 240, 280, 14);  // Base platform floor
+        draw3DBeam(60, 280, 60, 36, 16);   // Heavy main vertical post
+        draw3DBeam(52, 40, 190, 40, 14);   // Overhead gantry arm cross beam
+        draw3DBeam(60, 90, 110, 40, 10);   // Forty-five degree stability knee brace
+
+        // 3. Draw Textured 3D Stonework Brick Pedestal Box
+        ctx.save();
+        let boxX = 155, boxY = 236, boxW = 50, boxH = 44;
+        let boxGrad = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+        boxGrad.addColorStop(0, '#706d6b'); boxGrad.addColorStop(1, '#3a3938');
+        ctx.fillStyle = boxGrad;
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.strokeStyle = '#222222';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(boxX, boxY, boxW, boxH);
+        ctx.beginPath();
+        ctx.moveTo(boxX, boxY + 14); ctx.lineTo(boxX + boxW, boxY + 14);
+        ctx.moveTo(boxX, boxY + 28); ctx.lineTo(boxX + boxW, boxY + 28);
+        ctx.moveTo(boxX + 16, boxY); ctx.lineTo(boxX + 16, boxY + 14);
+        ctx.moveTo(boxX + 34, boxY); ctx.lineTo(boxX + 34, boxY + 14);
+        ctx.moveTo(boxX + 25, boxY + 14); ctx.lineTo(boxX + 25, boxY + 28);
+        ctx.moveTo(boxX + 12, boxY + 28); ctx.lineTo(boxX + 12, boxY + boxH);
+        ctx.moveTo(boxX + 38, boxY + 28); ctx.lineTo(boxX + 38, boxY + boxH);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(boxX, boxY, boxW, 3);
+        ctx.restore();
+
+        // 4. Compute Complex Physics Variables for Trembling/Swinging Postures
+        let isStruggling = wrongAttempts > 0;
+        let struggleIntensity = wrongAttempts * 1.5;
+        
+        // Wind intensity directly buffs the passive swing calculation velocity parameters slightly
+        let windSwayFactor = Math.sin(p = (swingTime * 1.5)) * (0.015 * windIntensity);
+        let currentSwingAngle = Math.sin(swingTime * 1.2) * 0.02 + windSwayFactor + (isStruggling ? (Math.sin(swingTime * 22) * 0.012 * wrongAttempts) : 0);
+
+        let nooseX = 180;
+        let nooseY = 40;
+
+        ctx.translate(nooseX, nooseY);
+        ctx.rotate(currentSwingAngle);
+        ctx.translate(-nooseX, -nooseY);
+
+        // 5. Draw Thick Coiled Twisted Hemp Noose Rope
+        ctx.strokeStyle = '#c2a670';
+        ctx.lineWidth = 3.5;
+        
+        // CRITICAL SCALE RE-CALIBRATION: Base rope resting state shortened to 105px.
+        // Pulled state range is completely clear of top beams or structural boundaries.
+        let baseRopeLength = 105;
+        let ropeBottom = baseRopeLength - currentHeightOffset;
+        
+        ctx.beginPath();
+        ctx.moveTo(180, 40);
+        ctx.lineTo(180, ropeBottom - 8);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#9c824f';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(180, ropeBottom - 8);
+        ctx.lineTo(180, ropeBottom);
+        ctx.stroke();
+
+        // 6. Draw High-Contrast Volumetric 3D Cylinder/Mannequin Stickman Shape
+        let headY = ropeBottom + 14;
+        let neckY = headY + 14;
+        let hipY = neckY + 42;
+
+        let breatheOffset = Math.sin(swingTime * 2.5) * 1.8;
+        let currentYAdjustment = isStruggling ? 0 : breatheOffset;
+
+        // Head Volume Sphere Globe Shading
+        let headGrad = ctx.createRadialGradient(174, headY - 4 + currentYAdjustment, 2, 180, headY + currentYAdjustment, 14);
+        headGrad.addColorStop(0, '#ffffff'); headGrad.addColorStop(0.8, '#dcdde1'); headGrad.addColorStop(1, '#7f8c8d');
+        ctx.fillStyle = headGrad;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(180, headY + currentYAdjustment, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw Main Volumetric Trunk Spine Segment
+        draw3DCylinder(180, headY + 14 + currentYAdjustment, 180, hipY + (isStruggling ? 0 : breatheOffset * 0.8), 3.5);
+
+        // Compute struggle frequency rates for arms and legs
+        let movementCycle = swingTime * (6 + wrongAttempts * 2.5);
+        let armWiggle = isStruggling ? Math.sin(movementCycle) * struggleIntensity * 4.5 : Math.sin(swingTime * 2) * 1.4;
+        let legWiggle = isStruggling ? Math.cos(movementCycle) * struggleIntensity * 5.5 : 0;
+
+        // Draw Left and Right Arm Shaded Cylinder Structures
+        if (isStruggling) {
+            draw3DCylinder(180, neckY + 6, 145, neckY + 2 + armWiggle, 2.8);
+            draw3DCylinder(180, neckY + 6, 215, neckY + 2 - armWiggle, 2.8);
+        } else {
+            // Balanced resting hands posture flat onto side positions
+            draw3DCylinder(180, neckY + 6 + currentYAdjustment, 158, neckY + 18 + breatheOffset, 2.8);
+            draw3DCylinder(158, neckY + 18 + breatheOffset, 164, neckY + 28, 2.5);
+            
+            draw3DCylinder(180, neckY + 6 + currentYAdjustment, 202, neckY + 18 + breatheOffset, 2.8);
+            draw3DCylinder(202, neckY + 18 + breatheOffset, 196, neckY + 28, 2.5);
+        }
+
+        // Draw Left and Right Leg Shaded Cylinder Structures
+        if (isStruggling) {
+            draw3DCylinder(180, hipY, 154 + armWiggle * 0.22, hipY + 38 + legWiggle, 3.2);
+            draw3DCylinder(180, hipY, 206 - armWiggle * 0.22, hipY + 38 - legWiggle, 3.2);
+        } else {
+            // Secure stable footing platform locked vertically on block surface plane
+            draw3DCylinder(180, hipY + breatheOffset * 0.8, 168, hipY + 36, 3.2);
+            draw3DCylinder(168, hipY + 36, 164, 236, 2.8);
+            
+            draw3DCylinder(180, hipY + breatheOffset * 0.8, 192, hipY + 36, 3.2);
+            draw3DCylinder(192, hipY + 36, 196, 236, 2.8);
+        }
+
+        // 7. Draw High-Contrast Emotional Expressive Face Textures
+        if (wrongAttempts >= maxAttempts) {
+            // Dead cross eye segments mapping terminal failure status
+            ctx.strokeStyle = '#ff4757';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(174, headY - 4); ctx.lineTo(178, headY + 2);
+            ctx.moveTo(178, headY - 4); ctx.lineTo(174, headY + 2);
+            ctx.moveTo(182, headY - 4); ctx.lineTo(186, headY + 2);
+            ctx.moveTo(186, headY - 4); ctx.lineTo(182, headY + 2);
+            ctx.stroke();
+        } else {
+            ctx.fillStyle = '#ffffff';
+            let eyeTremorX = isStruggling ? Math.sin(swingTime * 32) * 1.4 : 0;
+            let eyeTremorY = isStruggling ? Math.cos(swingTime * 32) * 1.4 : breatheOffset * 0.5;
+            
+            ctx.beginPath(); ctx.arc(174 + eyeTremorX, headY - 2 + eyeTremorY, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(184 + eyeTremorX, headY - 2 + eyeTremorY, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#121212';
+            let lookShiftX = currentSwingAngle * 12;
+            ctx.beginPath(); ctx.arc(174 + eyeTremorX + lookShiftX, headY - 2 + eyeTremorY, 1, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(184 + eyeTremorX + lookShiftX, headY - 2 + eyeTremorY, 1, 0, Math.PI * 2); ctx.fill();
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            if (isStruggling) {
+                ctx.arc(179, headY + 5, 2 + (wrongAttempts * 0.8), 0, Math.PI, true);
+            } else {
+                ctx.arc(179, headY + 2 + breatheOffset * 0.5, 4, 0.2 * Math.PI, 0.8 * Math.PI);
+            }
+            ctx.stroke();
+        }
+
+        ctx.restore(); // Closes ambient foreground shadows layer context cleanly
+    }
+
+    window.onload = () => {
+        initLevel();
+    };
+</script>
+</body>
+</html>
