@@ -157,24 +157,27 @@ function drawScene(){
   ctx.strokeStyle=`rgba(180,190,255,${p.a})`;ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+p.len,p.y);ctx.stroke();
  }
+
  const stage=Math.min(maxAttempts,wrongAttempts);
  const progress=stage/maxAttempts;
  const targetLift=progress*92;
  ropeOffset+=(targetLift-ropeOffset)*.12;
  swing+=.035;
- const sw=Math.sin(swing)*(stage>0?2.4:.4);
+ const sw=Math.sin(swing)*(stage>0?1.8:.35);
+
  ctx.strokeStyle='#f2f2f2';ctx.lineWidth=6;ctx.lineCap='round';
  ctx.beginPath();ctx.moveTo(48,260);ctx.lineTo(48,32);ctx.lineTo(208,32);ctx.stroke();
+
  ctx.strokeStyle='#555';ctx.lineWidth=4;
  ctx.beginPath();ctx.moveTo(118,266);ctx.lineTo(270,266);ctx.stroke();
+
  const cx=205+sw;
  const standingHeadY=171;
  const cy=standingHeadY-ropeOffset;
+
  ctx.strokeStyle='#9b774f';ctx.lineWidth=3;
- ctx.beginPath();ctx.moveTo(208,32);
- if(stage===0){ctx.lineTo(208,104);ctx.quadraticCurveTo(224,120,205,138);}else{ctx.lineTo(cx,cy-20)}
- ctx.stroke();
- if(stage>0){ctx.strokeStyle='#b78c5d';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(cx,cy-1,15,6,0,0,Math.PI*2);ctx.stroke()}
+ ctx.beginPath();ctx.moveTo(cx,32);ctx.lineTo(cx,cy+68);ctx.stroke();
+
  ctx.strokeStyle='#fff';ctx.lineWidth=4;
  ctx.beginPath();ctx.arc(cx,cy,17,0,Math.PI*2);ctx.stroke();
  ctx.beginPath();ctx.moveTo(cx,cy+17);ctx.lineTo(cx,cy+68);
@@ -182,8 +185,14 @@ function drawScene(){
  ctx.moveTo(cx,cy+35);ctx.lineTo(cx+23,cy+54);
  ctx.moveTo(cx,cy+68);ctx.lineTo(cx-20,cy+95);
  ctx.moveTo(cx,cy+68);ctx.lineTo(cx+20,cy+95);ctx.stroke();
- if(stage===0){ctx.fillStyle='#88ff9b';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText('SAFE',205,286)}
- else{ctx.fillStyle='#ff9b9b';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(`${stage} / ${maxAttempts} WRONG`,205,286)}
+
+ if(stage===0){
+  ctx.fillStyle='#88ff9b';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('SAFE',205,286);
+ }else{
+  ctx.fillStyle='#ff9b9b';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`${stage} / ${maxAttempts} WRONG`,205,286);
+ }
  ctx.restore();
 }
 function animate(){particles.forEach(p=>{p.x+=p.speed;if(p.x>330)p.x=-p.len});drawScene();animId=requestAnimationFrame(animate)}
@@ -232,7 +241,9 @@ function renderKeyboard(){
 }
 function guess(letter){
  if(!gameActive||paused||guessed.has(letter))return;initAudio();guessed.add(letter);
- if(currentWord.includes(letter)){[...currentWord].forEach((c,i)=>{if(c===letter)display[i]=letter});tone(620,'sine',.08,.05)}else{wrongAttempts++;sfx('wrong')}
+ if(currentWord.includes(letter)){
+  [...currentWord].forEach((c,i)=>{if(c===letter)display[i]=letter});tone(620,'sine',.08,.05)
+ }else{wrongAttempts++;sfx('wrong')}
  usedSpace.textContent=[...guessed].filter(l=>!currentWord.includes(l)).map(l=>l.toUpperCase()).join(' · ');
  renderWord();renderKeyboard();
  if(!display.includes('_'))win();else if(wrongAttempts>=maxAttempts)lose('Too many wrong guesses.');
@@ -250,20 +261,25 @@ function startFresh(){overlay.classList.remove('show');level=1;streak=0;initLeve
 actionBtn.onclick=()=>{overlay.classList.remove('show');if(!gameActive&&overlayTitle.textContent==='LEVEL CLEAR')initLevel();else if(!gameActive)startFresh();else setPause(false)};
 function setPause(v){
  if(!gameActive)return;paused=v;pauseBtn.textContent=paused?'▶':'Ⅱ';
- if(paused)showOverlay('PAUSED','Game paused.','Timer is stopped.','RESUME');else overlay.classList.remove('show')
+ if(paused)showOverlay('PAUSED','Game paused.','Timer is stopped.','RESUME');
+ else overlay.classList.remove('show')
 }
 pauseBtn.onclick=()=>setPause(!paused);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&gameActive&&!paused)setPause(true)});
 document.addEventListener('keydown',e=>{
- if(e.key>='a'&&e.key<='z')guess(e.key);else if(e.key>='A'&&e.key<='Z')guess(e.key.toLowerCase());
- else if(e.key==='Escape'&&gameActive)setPause(!paused);else if(e.key==='Enter'&&overlay.classList.contains('show'))actionBtn.click();
+ if(e.key>='a'&&e.key<='z')guess(e.key);
+ else if(e.key>='A'&&e.key<='Z')guess(e.key.toLowerCase());
+ else if(e.key==='Escape'&&gameActive)setPause(!paused);
+ else if(e.key==='Enter'&&overlay.classList.contains('show'))actionBtn.click();
 });
 
 refreshStart();
 function refreshStart(){
  overlayTitle.textContent='HANGMAN';
  overlayMsg.innerHTML='Use the category and clue to solve the word.<br>The character starts safe and rises only after wrong guesses.';
- overlayMeta.textContent=`Best level ${bestLevel}`;actionBtn.textContent='START';overlay.classList.add('show');
+ overlayMeta.textContent=`Best level ${bestLevel}`;
+ actionBtn.textContent='START';
+ overlay.classList.add('show');
 }
 resizeCanvas();cancelAnimationFrame(animId);animate();
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js'));
